@@ -2,28 +2,42 @@ import { prng } from 'seedrandom';
 import { applyOpToDocument, createDeleteOp, createInsertOp, DeleteOp, DocumentOp, InsertOp } from './DocumentOps';
 import { Process, ProcessFactory } from './process';
 import { randomInt } from './randomUtil';
+import { VersionVector } from './VersionVector';
 
-export class DocumentEditorFactory implements ProcessFactory<DocumentOp, string> {
-    public createProcess(processId: number, prng: prng): Process<DocumentOp, string> {
+interface DocumentEditorOp {
+    op: DocumentOp;
+    originatingProcess: number;
+    versionVector: VersionVector;
+}
+
+export class DocumentEditorFactory implements ProcessFactory<DocumentEditorOp, string> {
+    public createProcess(processId: number, prng: prng): Process<DocumentEditorOp, string> {
         return new DocumentEditor(processId, prng);
     }
 }
 
-export class DocumentEditor implements Process<DocumentOp, string> {
+export class DocumentEditor implements Process<DocumentEditorOp, string> {
     private readonly processId: number;
     private readonly prng: prng;
     private document: string;
+    private versionVector: VersionVector;
 
     public constructor(processId: number, prng: prng) {
         this.processId = processId;
         this.prng = prng;
         this.document = '';
+        this.versionVector = VersionVector.initial;
     }
 
-    public generateLocalOp(): DocumentOp {
+    public generateLocalOp(): DocumentEditorOp {
         const op = this.createRandomOp();
         this.document = applyOpToDocument(op, this.document);
-        return op;
+        this.versionVector = this.versionVector.incrementForProcessId(this.processId);
+        return {
+            op,
+            originatingProcess: this.processId,
+            versionVector: this.versionVector
+        };
     }
 
     private createRandomOp(): DocumentOp {
@@ -37,7 +51,7 @@ export class DocumentEditor implements Process<DocumentOp, string> {
         }
     }
 
-    public processRemoteOp(op: DocumentOp, order: number): void {
+    public processRemoteOp(op: DocumentEditorOp, order: number): void {
         // noop for now
     }
 
